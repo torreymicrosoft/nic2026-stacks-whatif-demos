@@ -1,0 +1,29 @@
+                                             
+Note: The result may contain false positive predictions (noise).
+NOTICE! - Want to get What-if without noise? Move to Deployment Stacks What-If https://aka.ms/stackswhatifGA
+
+Scope: resourceGroups/rg-demo-nic2026-stacks
+[38;5;141m
+  ~ Microsoft.Network/networkSecurityGroups/nsg-app[0m [2024-05-01][38;5;141m[0m
+    [38;5;208m-[0m tags.myTag[0m:[0m [38;5;208m"myValue"[0m
+    [38;5;141m~[0m properties.securityRules[0m:[0m [
+      [38;5;77m+[0m 1[0m:[0m[38;5;77m
+
+          name[0m:[38;5;77m                                "allow-ssh"
+          properties.access[0m:[38;5;77m                   "Allow"
+          properties.destinationAddressPrefix[0m:[38;5;77m "*"
+          properties.destinationPortRange[0m:[38;5;77m     "22"
+          properties.direction[0m:[38;5;77m                "Inbound"
+          properties.priority[0m:[38;5;77m                 110
+          properties.protocol[0m:[38;5;77m                 "Tcp"
+          properties.sourceAddressPrefix[0m:[38;5;77m      "*"
+          properties.sourcePortRange[0m:[38;5;77m          "*"
+[0m
+      ]
+[38;5;141m
+  ~ Microsoft.Storage/storageAccounts/stappb5plrxcdyi6my[0m [2023-05-01][38;5;141m[0m
+    [38;5;208m-[0m tags.myTag[0m:[0m [38;5;208m"myValue"[0m
+[38;5;141m[0m[38;5;246m
+  * Microsoft.Network/virtualNetworks/vnet-app
+[0m
+Resource changes: 2 to modify, 1 to ignore.

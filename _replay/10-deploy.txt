@@ -1,0 +1,12 @@
+  Name                   : stack-app
+  ProvisioningState      : succeeded
+  resourcesCleanupAction : detach
+  DenySettingsMode       : denyDelete
+  Resources              :
+      Microsoft.Network/networkSecurityGroups/nsg-app
+      Microsoft.Storage/storageAccounts/stappb5plrxcdyi6my
+  DetachedResources      :
+      Microsoft.Network/virtualNetworks/vnet-app
+
+[32m  vnet-app is still in the resource group.
+  The stack just stopped managing it.[0m

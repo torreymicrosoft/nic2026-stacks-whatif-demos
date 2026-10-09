@@ -1,0 +1,5 @@
+[31m  DenyAssignmentAuthorizationFailed : The client
+  'you@example.com' has permission to perform action
+  'Microsoft.Network/virtualNetworks/delete' on scope 'vnet-app';
+  however, the access is denied because of the deny assignment
+  created by Deployment Stack 'stack-app'.[0m

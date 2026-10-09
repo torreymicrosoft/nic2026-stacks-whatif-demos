@@ -1,0 +1,34 @@
+{
+  "window.title": "Stacks What-If demo",
+  "files.exclude": { ".vscode": true },
+  "files.readonlyInclude": { "**/*": true },
+  "workbench.startupEditor": "none",
+  "workbench.tips.enabled": false,
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  "workbench.panel.defaultLocation": "right",
+  "editor.fontSize": 26,
+  "editor.minimap.enabled": false,
+  "editor.wordWrap": "on",
+  "editor.lineNumbers": "off",
+  "editor.folding": false,
+  "editor.glyphMargin": false,
+  "editor.stickyScroll.enabled": false,
+  "editor.inlineSuggest.enabled": false,
+  "github.copilot.enable": { "*": false },
+  "breadcrumbs.enabled": false,
+  "diffEditor.renderSideBySide": false,
+  "diffEditor.ignoreTrimWhitespace": true,
+  "diffEditor.hideUnchangedRegions.enabled": true,
+  "diffEditor.hideUnchangedRegions.contextLineCount": 1,
+  "terminal.integrated.fontSize": 24,
+  "terminal.integrated.tabs.enabled": false,
+  "terminal.integrated.scrollback": 5000,
+  "terminal.integrated.defaultProfile.windows": "Stacks demo",
+  "terminal.integrated.profiles.windows": {
+    "Stacks demo": {
+      "path": "pwsh.exe",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "..\\Start-Demo.ps1"],
+      "overrideName": true
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "window.title": "AI demo",
+  "workbench.startupEditor": "none",
+  "files.exclude": {
+    ".vscode": true,
+    "chat": true,
+    "AGENTS.md": true
+  },
+  "editor.fontSize": 24,
+  "editor.minimap.enabled": false,
+  "editor.wordWrap": "on",
+  "markdown.preview.fontSize": 22,
+  "workbench.editorAssociations": {
+    "**/chat/stack-migration-chat.md": "vscode.markdown.preview.editor"
+  },
+  "chat.editor.fontSize": 20,
+  "chat.useAgentSkills": true,
+  "chat.agentSkillsLocations": {
+    ".github/skills": true,
+    ".agents/skills": false,
+    ".claude/skills": false,
+    "~/.agents/skills": false,
+    "~/.copilot/skills": false,
+    "~/.claude/skills": false
+  },
+  "chat.instructionsFilesLocations": {
+    ".github/instructions": true,
+    ".claude/rules": false,
+    "~/.copilot/instructions": false,
+    "~/.claude/rules": false
+  },
+  "chat.includeApplyingInstructions": false,
+  "github.copilot.chat.codeGeneration.useInstructionFiles": false,
+  "terminal.integrated.fontSize": 22,
+  "terminal.integrated.defaultProfile.windows": "AI demo",
+  "terminal.integrated.profiles.windows": {
+    "AI demo": {
+      "path": "pwsh.exe",
+      "args": [
+        "-NoLogo",
+        "-ExecutionPolicy",
+        "Bypass"
+      ],
+      "overrideName": true
+    }
+  },
+  "chat.fontSize": 20
+}

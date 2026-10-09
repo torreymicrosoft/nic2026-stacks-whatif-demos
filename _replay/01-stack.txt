@@ -1,0 +1,8 @@
+  Name                   : stack-app
+  ProvisioningState      : succeeded
+  resourcesCleanupAction : detach
+  DenySettingsMode       : denyDelete
+  Resources              :
+      Microsoft.Network/networkSecurityGroups/nsg-app
+      Microsoft.Network/virtualNetworks/vnet-app
+      Microsoft.Storage/storageAccounts/stappb5plrxcdyi6my
