@@ -1,7 +1,7 @@
 <#
-    One-time setup for the Stacks What-If demo on a new machine.
-    Checks what's needed, asks before installing anything, adds the demo-only Enter shortcut
-    to VS Code, signs in to Azure, prepares the stage, then opens VS Code and the script.
+    Setup for the Stacks What-If demos (V4) on a new machine, and the reset after a practice run.
+    Checks what's needed, asks before installing anything, adds two demo-only shortcuts to VS Code,
+    signs in to Azure, puts Azure back at the starting point, then opens the windows.
 
         .\Setup-Laptop.ps1           # normal
         .\Setup-Laptop.ps1 -NoOpen   # checks only: no Azure changes, no windows
@@ -30,7 +30,7 @@ Say ''
 Say 'Stacks What-If demo setup' Cyan
 Say ''
 
-# 0. PowerShell 7 (Az and the demo's background What-Ifs need it).
+# 0. PowerShell 7 (the demo terminal and Az need it).
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     if (Get-Command pwsh -ErrorAction SilentlyContinue) {
         & pwsh -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath @PSBoundParameters
@@ -64,8 +64,8 @@ if ($bv -and $bv -lt [version]'0.48.1') {
     else { Say "  WARN Bicep CLI $bv (the talk shows 0.48.1)" Yellow }
 }
 
-# 1b. Azure CLI 2.88 or later has 'az stack-whatif'. The demo runs PowerShell and only prints the az
-#     lines, so this only warns. If you install it here, close every VS Code window and reopen.
+# 1b. Azure CLI 2.88 or later has 'az stack-whatif'. The demo runs PowerShell and the az versions are
+#     comments in commands.ps1, so this only warns. If you install it here, close every VS Code window and reopen.
 $azv = $null
 if (Get-Command az -ErrorAction SilentlyContinue) { $azv = [version]((& az version --query '\"azure-cli\"' -o tsv 2>$null) | Select-Object -First 1) }
 if ($azv -and $azv -ge [version]'2.88.0') { Say "  OK   Azure CLI $azv" Green }
@@ -133,46 +133,53 @@ elseif (Ask '  ZoomIt is not installed. It zooms in where your mouse is during t
     if ($zoomIt) { Say '  OK   ZoomIt installed' Green } else { Say '  NOTE Could not find ZoomIt after installing. Open a new window and run this again.' Yellow }
 }
 else { Say '  NOTE Skipped ZoomIt. Ctrl+= in VS Code and Edge still zooms in.' Yellow }
-# The AI demo folder sits next to this script.
+# The AI demo folder.
 $aiFolder = Join-Path $here 'ai-demo'
 if ((Test-Path (Join-Path $aiFolder '.github\skills\migrate-resources-to-stack\SKILL.md')) -and (Test-Path (Join-Path $aiFolder 'whatif.ps1'))) { Say '  OK   AI demo folder' Green }
-else { Say '  NOTE AI demo folder not found next to this script.' Yellow }
+else { Say '  NOTE The ai-demo folder is missing.' Yellow }
 
-# 4. Demo-only Enter shortcut, merged into any existing VS Code keybindings.
-$entry = @'
-    // Stacks What-If demo: Enter in a file under stacks-whatif-demo advances the demo.
-    // Delete this entry when you're done with the demo. It has no effect anywhere else.
+# 4. Two demo-only shortcuts, merged into any existing VS Code keybindings. Ctrl+Enter in
+#    commands.ps1 sends the line the cursor is on to the terminal. Enter in commands.ps1 and in the
+#    app.v*.bicep files only moves to the next line (the files are read-only), so a stray Enter never
+#    reaches the terminal.
+$entry = @"
+    // Stacks What-If demo V4: in commands.ps1, Ctrl+Enter runs the line in the terminal. In the V4 demo
+    // files, Enter only moves to the next line. Delete these two entries when you're done with the demo.
+    {
+        "key": "ctrl+enter",
+        "command": "workbench.action.terminal.runSelectedText",
+        "when": "editorTextFocus && resourceFilename == 'commands.ps1' && resourcePath =~ /stacks-whatif-demo/i"
+    },
     {
         "key": "enter",
-        "command": "workbench.action.terminal.sendSequence",
-        "args": { "text": "\u000D" },
-        "when": "editorTextFocus && resourcePath =~ /stacks-whatif-demo/i"
+        "command": "cursorDown",
+        "when": "editorTextFocus && resourcePath =~ /stacks-whatif-demo.app.v|stacks-whatif-demo.commands.ps1$/i"
     }
-'@
+"@
 try {
     $kb = if (Test-Path $KeybindingsPath) { Get-Content $KeybindingsPath -Raw } else { '' }
-    if ($kb -match 'stacks-whatif-demo') { Say '  OK   Enter shortcut (already there)' Green }
+    if ($kb -match 'Stacks What-If demo V4') { Say '  OK   Ctrl+Enter shortcut (already there)' Green }
     else {
         if ($kb.Trim() -eq '') {
             $new = "// Place your key bindings in this file to override the defaults`r`n[`r`n$entry`r`n]`r`n"
         }
         else {
-            Copy-Item $KeybindingsPath "$KeybindingsPath.bak-stacksdemo" -Force
-            $m = [regex]::Match($kb, '(?m)^\s*\[')
-            if (-not $m.Success) { throw 'could not find the start of the keybindings list' }
-            $open = $m.Index + $m.Length
-            $rest = $kb.Substring($open)
-            $body = [regex]::Replace($rest, '(?s)/\*.*?\*/|//[^\r\n]*', '')
-            $sep  = if ($body.TrimStart().StartsWith(']')) { '' } else { ',' }
-            $new  = $kb.Substring(0, $open) + "`r`n" + $entry + $sep + $rest
+            Copy-Item $KeybindingsPath "$KeybindingsPath.bak-stacksdemo-v4" -Force
+            # Later entries win in VS Code, so these go at the end of the list.
+            $m = [regex]::Match($kb, '(?s)\]\s*$')
+            if (-not $m.Success) { throw 'could not find the end of the keybindings list' }
+            $head = $kb.Substring(0, $m.Index)
+            $body = [regex]::Replace($head, '(?s)/\*.*?\*/|//[^\r\n]*', '')
+            $sep  = if ($body.TrimEnd().EndsWith('[') -or $body.TrimEnd().EndsWith(',')) { '' } else { ',' }
+            $new  = $head.TrimEnd() + $sep + "`r`n" + $entry + "`r`n]`r`n"
         }
         $dir = Split-Path $KeybindingsPath -Parent
         if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
         [System.IO.File]::WriteAllText($KeybindingsPath, $new)
-        Say '  OK   Enter shortcut added to VS Code' Green
+        Say '  OK   Ctrl+Enter shortcut added to VS Code' Green
     }
 }
-catch { Say "  NOTE Enter shortcut not added ($($_.Exception.Message)). Click the terminal before each Enter instead." Yellow }
+catch { Say "  NOTE Ctrl+Enter shortcut not added ($($_.Exception.Message)). Copy and paste the commands instead." Yellow }
 
 if (-not $ok) { Say ''; Say 'Not ready yet. Fix the red items above, then run this again.' Red; return }
 
@@ -180,33 +187,33 @@ if (-not $ok) { Say ''; Say 'Not ready yet. Fix the red items above, then run th
 if (-not $NoOpen) {
     Say ''
     & (Join-Path $here 'Prepare-Stage.ps1')
-    if (-not $?) { Say 'Azure prep did not finish. The demo can still run with saved results (-Replay).' Yellow }
+    if (-not $?) { Say 'Azure prep did not finish. Run SETUP-LAPTOP.cmd again. The first Azure call sometimes times out.' Yellow }
 }
 
-# 6. Full check.
+# 6. Check that Azure is at the starting point.
 Say ''
-& (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'demo.ps1') -Preflight
+& (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'Prepare-Stage.ps1') -Check
 $live = ($LASTEXITCODE -eq 0)
 
-# 7. Open everything: the talking points, the portal, the AI demo window, and the main demo last so it's in front.
+# 7. Open everything: the portal, the AI demo window, and the main demo last so it's in front.
 #    The validation demo is a backup now, so it doesn't open. OPEN-VALIDATION-DEMO.cmd opens it if you need it.
 if (-not $NoOpen) {
-    Start-Process notepad.exe -ArgumentList "`"$(Join-Path $here 'TELEPROMPTER.md')`""
     & (Join-Path $here 'Open-Portal.ps1')
     Start-Sleep -Seconds 2
     & cmd.exe /c "`"$(Join-Path $here 'OPEN-AI-DEMO.cmd')`""
     Start-Sleep -Seconds 3
-    & code -n "$ws" 2>$null
+    & code -n "$ws" "$(Join-Path $ws 'commands.ps1')" "$(Join-Path $ws 'app.v1.bicep')" 2>$null
     # ZoomIt runs in the tray. Start it now so Ctrl+1 works on stage.
     if ($zoomIt -and -not (Get-Process ZoomIt64, ZoomIt -ErrorAction SilentlyContinue)) { Start-Process $zoomIt }
 }
 
 Say ''
-Say 'All set.' Green
+if ($live) { Say 'All set.' Green }
+else { Say 'Not ready yet: Azure is not at the starting point. Run SETUP-LAPTOP.cmd again before the talk.' Yellow }
 Say '  1. VS Code opens two windows: Stacks What-If demo and AI demo. If one asks'
 Say '     whether you trust the authors, click "Yes, I trust the authors".'
 Say '  2. In Edge, sign in to the portal if it asks. Leave the three tabs open, and zoom the portal to 175% (Ctrl+plus).'
-Say '  3. The AI demo window opens with the saved Copilot chat and the skill. If the chat shows raw text, press Ctrl+Shift+V.'
-Say '  4. In the Stacks What-If demo window, press Ctrl + ` (the key under Esc) to start the demo.'
-if (-not $live) { Say '  Azure is not ready, so the demo will use saved results. That is fine for rehearsing.' Yellow }
-Say '  5. Then follow START-HERE.md.'
+Say '  3. In the Stacks What-If demo window, press Ctrl + ` (the key under Esc) to open the demo terminal.'
+Say '     It loads Azure PowerShell and leaves a PS> prompt. Leave it there.'
+Say '  4. The AI demo window shows the recorded Copilot chat as a page, chat\stack-migration-chat.md.'
+Say '  5. Then follow README.md.'

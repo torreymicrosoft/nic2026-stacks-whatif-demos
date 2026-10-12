@@ -44,5 +44,13 @@
       "overrideName": true
     }
   },
-  "chat.fontSize": 20
+  "chat.fontSize": 20,
+  "workbench.colorCustomizations": {
+    "diffEditor.insertedLineBackground": "#28a74522",
+    "diffEditor.removedLineBackground": "#cb243122",
+    "diffEditor.insertedTextBackground": "#28a74566",
+    "diffEditor.removedTextBackground": "#cb243166",
+    "diffEditor.insertedTextBorder": "#28a745",
+    "diffEditor.removedTextBorder": "#cb2431"
+  }
 }

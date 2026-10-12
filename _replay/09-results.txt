@@ -1,5 +1,0 @@
-[32;1mName         [0m[32;1m Type[0m
-[32;1m----         [0m [32;1m----[0m
-pr-142        Microsoft.Resources/deploymentStacksWhatIfResults
-pr-142-delete Microsoft.Resources/deploymentStacksWhatIfResults
-whatif-main   Microsoft.Resources/deploymentStacksWhatIfResults

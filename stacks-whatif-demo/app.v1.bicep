@@ -1,4 +1,4 @@
-// The app as it runs today. Deployed and managed as a deployment stack.
+// Demo app for NIC 2026.
 targetScope = 'resourceGroup'
 
 param location string = resourceGroup().location

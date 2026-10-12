@@ -1,32 +1,32 @@
 <#
-    Puts Azure at the demo's starting point. Run it the day before and again the morning
-    of the session. Safe to run any number of times.
+    Puts Azure at the V4 demo's starting point. Run it the day before, again the morning of the
+    session, and after every practice run. Safe to run any number of times.
 
-        .\Prepare-Stage.ps1                    # check and fix the starting point
-        .\Prepare-Stage.ps1 -CaptureReplay     # also refresh the saved results used by -Replay
-        .\Prepare-Stage.ps1 -SubscriptionId <id>  # use a different test subscription
+        .\Prepare-Stage.ps1           # check and fix the starting point
+        .\Prepare-Stage.ps1 -Check    # only check, change nothing (exit code 0 means ready)
 
-    Starting point: resource group with one deployment stack ('stack-app') that manages
-    vnet-app, nsg-app (HTTPS rule only) and the storage account, with deny settings on. Nothing
-    else. For the AI demo, a second resource group ('rg-demo-nic2026-brownfield') with three
-    hand-made resources and no stack.
+    Starting point: rg-demo-nic2026-stacks has vnet-app, nsg-app (HTTPS rule only) and the storage
+    account (Standard_LRS) from a regular deployment of app.v1.bicep. No deployment stack, so no
+    deny assignments, and no old What-If results. The demo deploys the stack live.
+    For the AI demo: rg-demo-nic2026-brownfield with three hand-made resources and no stack.
 #>
 [CmdletBinding()]
-param([string]$SubscriptionId, [switch]$CaptureReplay)
+param([string]$SubscriptionId, [switch]$Check)
 
 $ErrorActionPreference = 'Stop'
 $cfgFile = Join-Path $PSScriptRoot 'demo.config.json'
 $cfg = Get-Content $cfgFile -Raw | ConvertFrom-Json
-$v1  = Join-Path $PSScriptRoot 'stacks-whatif-demo\app.v1.bicep'
+$v1 = Join-Path $PSScriptRoot 'stacks-whatif-demo\app.v1.bicep'
 
 function Say([string]$Text, [string]$Color = 'Gray') { Write-Host $Text -ForegroundColor $Color }
 
 Say ''
-Say 'Preparing the Stacks What-If demo' Cyan
+Say $(if ($Check) { 'Checking the Stacks What-If demo' } else { 'Preparing the Stacks What-If demo' }) Cyan
 Import-Module Az.Resources -MinimumVersion 10.2.1 -WarningAction SilentlyContinue
 
 # 1. Sign in and pick the subscription.
 if (-not (Get-AzContext -ErrorAction SilentlyContinue)) {
+    if ($Check) { Say '  MISS not signed in to Azure. Run SETUP-LAPTOP.cmd.' Red; exit 1 }
     Say '  Signing in to Azure (a browser window opens)...' Yellow
     Connect-AzAccount -WarningAction SilentlyContinue | Out-Null
 }
@@ -35,9 +35,13 @@ $ctx = Set-AzContext -Subscription $cfg.subscriptionId -WarningAction SilentlyCo
 if ($ctx.Subscription.Name -match 'prod|production|shared|corp') {
     throw "Subscription '$($ctx.Subscription.Name)' looks like production. Use a disposable test subscription."
 }
-$cfg.subscriptionName = $ctx.Subscription.Name
-$cfg | Add-Member -NotePropertyName tenantId -NotePropertyValue $ctx.Tenant.Id -Force
-$cfg | ConvertTo-Json | Set-Content $cfgFile -Encoding utf8
+if (-not $Check) {
+    $cfg.subscriptionName = $ctx.Subscription.Name
+    # The subscription's own tenant, for the portal links. The tenant you signed in to can be a different one.
+    $tenantId = if ($ctx.Subscription.HomeTenantId) { $ctx.Subscription.HomeTenantId } else { $ctx.Tenant.Id }
+    $cfg | Add-Member -NotePropertyName tenantId -NotePropertyValue $tenantId -Force
+    $cfg | ConvertTo-Json | Set-Content $cfgFile -Encoding utf8
+}
 Say "  OK   $($ctx.Account.Id) | $($ctx.Subscription.Name)" Green
 
 # 2. Resource group. A slow or failed lookup must not look like "missing".
@@ -53,58 +57,77 @@ function Get-RgOrNull([string]$Name) {
 }
 $rg = Get-RgOrNull $cfg.resourceGroup
 if (-not $rg) {
+    if ($Check) { Say "  MISS resource group $($cfg.resourceGroup)" Red; exit 1 }
     $tags = @{ purpose = 'demo'; owner = $env:USERNAME; autoDelete = 'true'; event = 'NIC 2026'; created = (Get-Date).ToUniversalTime().ToString('s') + 'Z' }
     $null = New-AzResourceGroup -Name $cfg.resourceGroup -Location $cfg.location -Tag $tags
     Say "  OK   created $($cfg.resourceGroup) in $($cfg.location)" Green
 }
 else { Say "  OK   $($cfg.resourceGroup) ($($rg.Location))" Green }
 
-# 3. Stack at the starting point.
-function Reset-DemoStack {
+# 3. What the starting point looks like.
+function Get-StageState {
     $stack = Get-AzResourceGroupDeploymentStack -ResourceGroupName $cfg.resourceGroup -Name $cfg.stackName -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-    $names = @($stack.Resources | ForEach-Object { ($_.Id -split '/')[-1] })
+    $vnet = Get-AzResource -ResourceGroupName $cfg.resourceGroup -Name 'vnet-app' -ResourceType 'Microsoft.Network/virtualNetworks' -ErrorAction SilentlyContinue
     $nsg = Get-AzResource -ResourceGroupName $cfg.resourceGroup -Name 'nsg-app' -ResourceType 'Microsoft.Network/networkSecurityGroups' -ExpandProperties -ErrorAction SilentlyContinue
+    $st = @(Get-AzResource -ResourceGroupName $cfg.resourceGroup -ResourceType 'Microsoft.Storage/storageAccounts' -ExpandProperties -ErrorAction SilentlyContinue | Where-Object Name -like 'stapp*')
     $rules = @($nsg.Properties.securityRules | ForEach-Object { $_.name })
-    $atStart = $stack -and $stack.ProvisioningState -eq 'succeeded' -and $names.Count -eq 3 -and ($names -contains 'vnet-app') -and ($names -contains 'nsg-app') -and
-               $stack.ResourcesCleanupAction -eq 'detach' -and "$($stack.DenySettings.Mode)" -match '^denyDelete$' -and -not ($rules -contains 'allow-ssh')
-    if ($atStart) { Say "  OK   stack '$($cfg.stackName)' is at the starting point" Green }
-    else {
-        Say "  ..   deploying stack '$($cfg.stackName)' from app.v1.bicep (a few minutes)" DarkGray
-        # DeleteResources first re-manages vnet-app and removes anything a rehearsal added (like rt-app
-        # from the V2 demo). Then DetachAll puts action on unmanage back to detach for the demo.
-        $null = Set-AzResourceGroupDeploymentStack -Name $cfg.stackName -ResourceGroupName $cfg.resourceGroup -TemplateFile $v1 `
-            -ActionOnUnmanage DeleteResources -DenySettingsMode $cfg.denySettingsMode -Force -WarningAction SilentlyContinue
-        $null = Set-AzResourceGroupDeploymentStack -Name $cfg.stackName -ResourceGroupName $cfg.resourceGroup -TemplateFile $v1 `
-            -ActionOnUnmanage DetachAll -DenySettingsMode $cfg.denySettingsMode -Force -WarningAction SilentlyContinue
-        Say "  OK   stack '$($cfg.stackName)' reset to the starting point" Green
+    $whatIfs = @(Get-AzResourceGroupDeploymentStackWhatIfResult -ResourceGroupName $cfg.resourceGroup -ErrorAction SilentlyContinue)
+    $extra = @(Get-AzResource -ResourceGroupName $cfg.resourceGroup -ErrorAction SilentlyContinue | Where-Object { $_.ResourceType -notin 'Microsoft.Network/virtualNetworks', 'Microsoft.Network/networkSecurityGroups', 'Microsoft.Storage/storageAccounts', 'Microsoft.Resources/deploymentStacksWhatIfResults' })
+    [pscustomobject]@{
+        NoStack  = -not $stack
+        Vnet     = [bool]$vnet
+        NsgV1    = [bool]$nsg -and $rules.Count -eq 1 -and $rules[0] -eq 'allow-https'
+        Storage  = $st.Count -eq 1 -and $st[0].Sku.Name -eq 'Standard_LRS'
+        WhatIfs  = $whatIfs.Count
+        Extra    = @($extra | ForEach-Object Name)
+        Stack    = $stack
     }
-
-    # 4. Detached leftovers from V2 rehearsals (only rt-app, only in this resource group).
-    $rt = Get-AzResource -ResourceGroupName $cfg.resourceGroup -Name 'rt-app' -ErrorAction SilentlyContinue
-    if ($rt) { Remove-AzResource -ResourceId $rt.ResourceId -Force | Out-Null; Say '  OK   removed leftover rt-app' Green }
 }
-Reset-DemoStack
+$s = Get-StageState
+$ready = $s.NoStack -and $s.Vnet -and $s.NsgV1 -and $s.Storage -and $s.WhatIfs -eq 0 -and $s.Extra.Count -eq 0
 
-# 5. Old What-If results, so the list in step 9 is clean.
-$old = @(Get-AzResourceGroupDeploymentStackWhatIfResult -ResourceGroupName $cfg.resourceGroup -ErrorAction SilentlyContinue)
-foreach ($w in $old) { Remove-AzResourceGroupDeploymentStackWhatIfResult -ResourceGroupName $cfg.resourceGroup -Name $w.Name -Force -Confirm:$false -ErrorAction SilentlyContinue | Out-Null }
-if ($old.Count) { Say "  OK   cleared $($old.Count) old What-If results" Green }
+if ($Check) {
+    Say ("  {0} no stack '{1}' yet" -f $(if ($s.NoStack) { 'OK  ' } else { 'MISS' }), $cfg.stackName) $(if ($s.NoStack) { 'Green' } else { 'Red' })
+    Say ("  {0} vnet-app, nsg-app (HTTPS rule only), storage account on Standard_LRS" -f $(if ($s.Vnet -and $s.NsgV1 -and $s.Storage) { 'OK  ' } else { 'MISS' })) $(if ($s.Vnet -and $s.NsgV1 -and $s.Storage) { 'Green' } else { 'Red' })
+    Say ("  {0} no old What-If results" -f $(if ($s.WhatIfs -eq 0) { 'OK  ' } else { 'MISS' })) $(if ($s.WhatIfs -eq 0) { 'Green' } else { 'Red' })
+    if ($s.Extra.Count) { Say "  MISS other resources in the group: $($s.Extra -join ', ')" Red }
+    Say $(if ($ready) { 'Ready.' } else { 'Not ready. Run Prepare-Stage.ps1 (or SETUP-LAPTOP.cmd).' }) $(if ($ready) { 'Green' } else { 'Yellow' })
+    exit $(if ($ready) { 0 } else { 1 })
+}
 
-# 6. The brownfield resource group for the AI demo (hand-made resources, no stack).
+if ($ready) { Say '  OK   already at the starting point' Green }
+else {
+    # 4. A practice run leaves a stack behind. Remove it but keep the resources (detach), which also
+    #    removes its deny assignment.
+    if (-not $s.NoStack) {
+        Say "  ..   removing stack '$($cfg.stackName)' and keeping its resources (about a minute)" DarkGray
+        Remove-AzResourceGroupDeploymentStack -ResourceGroupName $cfg.resourceGroup -Name $cfg.stackName -ActionOnUnmanage DetachAll -Force -WarningAction SilentlyContinue | Out-Null
+        Say "  OK   stack '$($cfg.stackName)' removed, resources kept" Green
+    }
+    # 5. Leftovers from older rehearsals (V2 added a route table).
+    foreach ($name in $s.Extra) {
+        $r = Get-AzResource -ResourceGroupName $cfg.resourceGroup -Name $name -ErrorAction SilentlyContinue
+        if ($r) { Remove-AzResource -ResourceId $r.ResourceId -Force | Out-Null; Say "  OK   removed leftover $name" Green }
+    }
+    # 6. A regular deployment of app.v1.bicep puts back the virtual network, the HTTPS-only rule and
+    #    Standard_LRS storage.
+    #    The demo doesn't change the SKU any more, but an older practice run did. Then Azure won't change
+    #    it back until it's done copying the storage account to its geo-redundant region, so this can
+    #    take a while.
+    Say '  ..   deploying app.v1.bicep with a regular deployment (about a minute)' DarkGray
+    $dep = New-AzResourceGroupDeployment -Name 'app-v1' -ResourceGroupName $cfg.resourceGroup -TemplateFile $v1 -WarningAction SilentlyContinue -ErrorAction SilentlyContinue -ErrorVariable depErr
+    if ($dep.ProvisioningState -eq 'Succeeded') { Say '  OK   app.v1.bicep deployed, no stack' Green }
+    else { Say "  WARN app.v1.bicep didn't finish: $(($depErr | Select-Object -First 1).Exception.Message)" Yellow }
+    # 7. Old What-If results.
+    $old = @(Get-AzResourceGroupDeploymentStackWhatIfResult -ResourceGroupName $cfg.resourceGroup -ErrorAction SilentlyContinue)
+    foreach ($w in $old) { Remove-AzResourceGroupDeploymentStackWhatIfResult -ResourceGroupName $cfg.resourceGroup -Name $w.Name -Force -Confirm:$false -ErrorAction SilentlyContinue | Out-Null }
+    if ($old.Count) { Say "  OK   cleared $($old.Count) old What-If results" Green }
+}
+
+# 8. The brownfield resource group for the AI demo (hand-made resources, no stack).
 & (Join-Path $PSScriptRoot 'Prepare-Brownfield.ps1')
 
-# 7. Optional: refresh the saved results used by -Replay with a full live pass.
-if ($CaptureReplay) {
-    Say '  ..   running a full live pass to refresh the saved results (a few minutes)' DarkGray
-    & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'demo.ps1') -NoPause | Out-Null
-    $saved = @(Get-ChildItem (Join-Path $PSScriptRoot '_replay') -Filter '*.txt').Count
-    Say "  OK   $saved saved results refreshed" Green
-    # The live pass really deploys the change in step 10, so put the stack back again.
-    Reset-DemoStack
-    foreach ($w in @(Get-AzResourceGroupDeploymentStackWhatIfResult -ResourceGroupName $cfg.resourceGroup -ErrorAction SilentlyContinue)) {
-        Remove-AzResourceGroupDeploymentStackWhatIfResult -ResourceGroupName $cfg.resourceGroup -Name $w.Name -Force -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
-    }
-}
-
+$s = Get-StageState
+$ready = $s.NoStack -and $s.Vnet -and $s.NsgV1 -and $s.Storage -and $s.WhatIfs -eq 0 -and $s.Extra.Count -eq 0
 Say ''
-Say 'Ready for the stage.' Green
+if ($ready) { Say 'Ready for the stage.' Green } else { Say 'Not at the starting point yet. Run this again.' Yellow; exit 1 }

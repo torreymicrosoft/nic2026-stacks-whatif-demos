@@ -1,5 +1,13 @@
 {
   "window.title": "Stacks What-If demo",
+  "workbench.colorCustomizations": {
+    "diffEditor.insertedLineBackground": "#28a74522",
+    "diffEditor.removedLineBackground": "#cb243122",
+    "diffEditor.insertedTextBackground": "#28a74566",
+    "diffEditor.removedTextBackground": "#cb243166",
+    "diffEditor.insertedTextBorder": "#28a745",
+    "diffEditor.removedTextBorder": "#cb2431"
+  },
   "files.exclude": { ".vscode": true },
   "files.readonlyInclude": { "**/*": true },
   "workbench.startupEditor": "none",
@@ -9,25 +17,28 @@
   "editor.fontSize": 26,
   "editor.minimap.enabled": false,
   "editor.wordWrap": "on",
+  "editor.wrappingIndent": "indent",
   "editor.lineNumbers": "off",
   "editor.folding": false,
   "editor.glyphMargin": false,
   "editor.stickyScroll.enabled": false,
   "editor.inlineSuggest.enabled": false,
   "github.copilot.enable": { "*": false },
+  "powershell.startAutomatically": false,
+  "powershell.integratedConsole.showOnStartup": false,
   "breadcrumbs.enabled": false,
   "diffEditor.renderSideBySide": false,
   "diffEditor.ignoreTrimWhitespace": true,
-  "diffEditor.hideUnchangedRegions.enabled": true,
-  "diffEditor.hideUnchangedRegions.contextLineCount": 1,
+  "diffEditor.hideUnchangedRegions.enabled": false,
   "terminal.integrated.fontSize": 24,
   "terminal.integrated.tabs.enabled": false,
   "terminal.integrated.scrollback": 5000,
+  "terminal.integrated.enablePersistentSessions": false,
   "terminal.integrated.defaultProfile.windows": "Stacks demo",
   "terminal.integrated.profiles.windows": {
     "Stacks demo": {
       "path": "pwsh.exe",
-      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "..\\Start-Demo.ps1"],
+      "args": ["-NoLogo", "-NoExit", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "..\\Start-Terminal.ps1"],
       "overrideName": true
     }
   }
