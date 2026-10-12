@@ -4,7 +4,7 @@
     signs in to Azure, puts Azure back at the starting point, then opens the windows.
 
         .\Setup-Laptop.ps1           # normal
-        .\Setup-Laptop.ps1 -NoOpen   # checks only: no Azure changes, no windows
+        .\Setup-Laptop.ps1 -NoOpen   # no Azure changes and no windows. It still sets up what's missing on this laptop.
 #>
 [CmdletBinding()]
 param(
