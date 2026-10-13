@@ -65,7 +65,9 @@ if ($Replay) {
 else {
     try {
         Import-Module Az.Resources -MinimumVersion 10.2.1 -WarningAction SilentlyContinue
-        $null = Set-AzContext -Subscription $cfg.subscriptionId -WarningAction SilentlyContinue
+        $pick = @{ Subscription = $cfg.subscriptionId }
+        if ($cfg.tenantId -match '^[0-9a-f]{8}-' -and $cfg.tenantId -notmatch '^0{8}-') { $pick.Tenant = $cfg.tenantId }
+        $null = Set-AzContext @pick -WarningAction SilentlyContinue
         $stackId = "/subscriptions/$($cfg.subscriptionId)/resourceGroups/$rg/providers/Microsoft.Resources/deploymentStacks/$stackName"
         Write-Host '  Getting the latest status of all resources... (about 30 seconds)' -ForegroundColor DarkGray
         $r = New-AzResourceGroupDeploymentStackWhatIfResult -Name $name -ResourceGroupName $rg -StackResourceId $stackId -TemplateFile $tf `

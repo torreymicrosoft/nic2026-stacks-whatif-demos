@@ -8,7 +8,9 @@ param()
 $ErrorActionPreference = 'Stop'
 $cfg = Get-Content (Join-Path $PSScriptRoot 'demo.config.json') -Raw | ConvertFrom-Json
 Import-Module Az.Resources -MinimumVersion 10.2.1 -WarningAction SilentlyContinue
-$ctx = Set-AzContext -Subscription $cfg.subscriptionId -WarningAction SilentlyContinue
+$pick = @{ Subscription = $cfg.subscriptionId }
+if ($cfg.tenantId -match '^[0-9a-f]{8}-' -and $cfg.tenantId -notmatch '^0{8}-') { $pick.Tenant = $cfg.tenantId }
+$ctx = Set-AzContext @pick -WarningAction SilentlyContinue
 
 Write-Host ''
 Write-Host "Subscription:   $($ctx.Subscription.Name)" -ForegroundColor Gray

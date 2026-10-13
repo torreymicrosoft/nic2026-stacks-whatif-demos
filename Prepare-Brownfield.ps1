@@ -17,7 +17,9 @@ if (-not $rgName -or -not $stackName) { throw 'demo.config.json needs brownfield
 function Say([string]$Text, [string]$Color = 'Gray') { Write-Host $Text -ForegroundColor $Color }
 
 Import-Module Az.Resources -WarningAction SilentlyContinue
-$null = Set-AzContext -Subscription $cfg.subscriptionId -WarningAction SilentlyContinue
+$pick = @{ Subscription = $cfg.subscriptionId }
+if ($cfg.tenantId -match '^[0-9a-f]{8}-' -and $cfg.tenantId -notmatch '^0{8}-') { $pick.Tenant = $cfg.tenantId }
+$null = Set-AzContext @pick -WarningAction SilentlyContinue
 $tags = @{ purpose = 'demo'; event = 'NIC 2026' }
 
 function Test-Resource([string]$Type, [string]$Like) {

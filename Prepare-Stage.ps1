@@ -24,14 +24,24 @@ Say ''
 Say $(if ($Check) { 'Checking the Stacks What-If demo' } else { 'Preparing the Stacks What-If demo' }) Cyan
 Import-Module Az.Resources -MinimumVersion 10.2.1 -WarningAction SilentlyContinue
 
-# 1. Sign in and pick the subscription.
-if (-not (Get-AzContext -ErrorAction SilentlyContinue)) {
-    if ($Check) { Say '  MISS not signed in to Azure. Run SETUP-LAPTOP.cmd.' Red; exit 1 }
-    Say '  Signing in to Azure (a browser window opens)...' Yellow
-    Connect-AzAccount -WarningAction SilentlyContinue | Out-Null
-}
+# 1. Sign in and pick the subscription. A saved sign-in can be for another account or tenant, or expired,
+#    so if it can't reach the subscription, sign in again for the subscription's own tenant.
 if ($SubscriptionId) { $cfg.subscriptionId = $SubscriptionId }
-$ctx = Set-AzContext -Subscription $cfg.subscriptionId -WarningAction SilentlyContinue
+$pick = @{ Subscription = $cfg.subscriptionId }
+if ($cfg.tenantId -match '^[0-9a-f]{8}-' -and $cfg.tenantId -notmatch '^0{8}-') { $pick.Tenant = $cfg.tenantId }
+function Select-DemoSubscription {
+    try { Set-AzContext @pick -WarningAction SilentlyContinue -ErrorAction Stop }
+    catch { $script:pickError = ($_.Exception.Message -split "`r?`n")[0]; $null }
+}
+$ctx = $null
+if (Get-AzContext -WarningAction SilentlyContinue -ErrorAction SilentlyContinue) { $ctx = Select-DemoSubscription }
+if (-not $ctx) {
+    if ($Check) { Say "  MISS Azure PowerShell isn't signed in to an account that can reach the demo subscription. Run SETUP-LAPTOP.cmd." Red; exit 1 }
+    Say '  Signing in to Azure (a sign-in window opens)...' Yellow
+    Connect-AzAccount @pick -WarningAction SilentlyContinue | Out-Null
+    $ctx = Select-DemoSubscription
+    if (-not $ctx) { throw "Signed in, but subscription $($cfg.subscriptionId) still isn't reachable ($script:pickError). Check the subscription ID in demo.config.json, and that this account has access to it." }
+}
 if ($ctx.Subscription.Name -match 'prod|production|shared|corp') {
     throw "Subscription '$($ctx.Subscription.Name)' looks like production. Use a disposable test subscription."
 }
@@ -83,6 +93,7 @@ function Get-StageState {
         Stack    = $stack
     }
 }
+Say "  ..   checking what's in $($cfg.resourceGroup) (about 30 seconds)" DarkGray
 $s = Get-StageState
 $ready = $s.NoStack -and $s.Vnet -and $s.NsgV1 -and $s.Storage -and $s.WhatIfs -eq 0 -and $s.Extra.Count -eq 0
 

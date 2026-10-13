@@ -57,7 +57,10 @@ else { Say '  MISS Bicep CLI' Red; $ok = $false }
 # 1a. Bicep CLI version. The talk uses 0.48.1. Older ones still deploy the demo, so this only warns.
 $bv = $null; if ((((& bicep --version 2>$null) -join ' ')) -match '(\d+\.\d+\.\d+)') { $bv = [version]$Matches[1] }
 if ($bv -and $bv -lt [version]'0.48.1') {
-    if (Ask "  Bicep CLI is $bv. Update it to the latest with winget now?") {
+    # winget can only update a Bicep CLI it installed. Otherwise, say so instead of offering an update that fails.
+    $viaWinget = (& winget list -e --id Microsoft.Bicep --accept-source-agreements 2>$null | Out-String) -match 'Microsoft\.Bicep'
+    if (-not $viaWinget) { Say "  NOTE Bicep CLI $bv. The talk shows 0.48.1, but the demo works with $bv. It wasn't installed with winget, so update it the way you installed it if you want to." Yellow }
+    elseif (Ask "  Bicep CLI is $bv. Update it to the latest with winget now?") {
         winget upgrade -e --id Microsoft.Bicep --accept-source-agreements --accept-package-agreements
         Update-SessionPath
     }
@@ -139,9 +142,12 @@ if ((Test-Path (Join-Path $aiFolder '.github\skills\migrate-resources-to-stack\S
 else { Say '  NOTE The ai-demo folder is missing.' Yellow }
 
 # 4. Two demo-only shortcuts, merged into any existing VS Code keybindings. Ctrl+Enter in
-#    commands.ps1 sends the line the cursor is on to the terminal. Enter in commands.ps1 and in the
-#    app.v*.bicep files only moves to the next line (the files are read-only), so a stray Enter never
-#    reaches the terminal.
+#    commands.ps1 sends the line the cursor is on to the terminal. Enter in commands.ps1, in the
+#    app.v*.bicep files and in the validation demo files only moves to the next line (the files are
+#    read-only), so a stray Enter never reaches the terminal. If the Enter entry is from before the
+#    validation demo used commands.ps1, it gets updated.
+$oldEnterWhen = 'resourcePath =~ /stacks-whatif-demo.app.v|stacks-whatif-demo.commands.ps1$/i'
+$enterWhen    = 'resourcePath =~ /stacks-whatif-demo.app.v|stacks-whatif-demo-debug.|stacks-whatif-demo.commands.ps1$/i'
 $entry = @"
     // Stacks What-If demo V4: in commands.ps1, Ctrl+Enter runs the line in the terminal. In the V4 demo
     // files, Enter only moves to the next line. Delete these two entries when you're done with the demo.
@@ -153,12 +159,17 @@ $entry = @"
     {
         "key": "enter",
         "command": "cursorDown",
-        "when": "editorTextFocus && resourcePath =~ /stacks-whatif-demo.app.v|stacks-whatif-demo.commands.ps1$/i"
+        "when": "editorTextFocus && $enterWhen"
     }
 "@
 try {
-    $kb = if (Test-Path $KeybindingsPath) { Get-Content $KeybindingsPath -Raw } else { '' }
-    if ($kb -match 'Stacks What-If demo V4') { Say '  OK   Ctrl+Enter shortcut (already there)' Green }
+    $kb = if (Test-Path $KeybindingsPath) { "$(Get-Content $KeybindingsPath -Raw)" } else { '' }
+    if ($kb -match 'Stacks What-If demo V4' -and $kb.Contains($oldEnterWhen)) {
+        Copy-Item $KeybindingsPath "$KeybindingsPath.bak-stacksdemo-v4-enter" -Force
+        [System.IO.File]::WriteAllText($KeybindingsPath, $kb.Replace($oldEnterWhen, $enterWhen))
+        Say '  OK   Enter shortcut updated for the validation demo' Green
+    }
+    elseif ($kb -match 'Stacks What-If demo V4') { Say '  OK   Ctrl+Enter shortcut (already there)' Green }
     else {
         if ($kb.Trim() -eq '') {
             $new = "// Place your key bindings in this file to override the defaults`r`n[`r`n$entry`r`n]`r`n"
@@ -183,11 +194,14 @@ catch { Say "  NOTE Ctrl+Enter shortcut not added ($($_.Exception.Message)). Cop
 
 if (-not $ok) { Say ''; Say 'Not ready yet. Fix the red items above, then run this again.' Red; return }
 
-# 5. Sign in and put Azure at the starting point.
+# 5. Sign in and put Azure at the starting point. If this stops, the windows below still open.
 if (-not $NoOpen) {
     Say ''
-    & (Join-Path $here 'Prepare-Stage.ps1')
-    if (-not $?) { Say 'Azure prep did not finish. Run SETUP-LAPTOP.cmd again. The first Azure call sometimes times out.' Yellow }
+    try {
+        & (Join-Path $here 'Prepare-Stage.ps1')
+        if (-not $?) { Say 'Azure prep did not finish. Run SETUP-LAPTOP.cmd again. The first Azure call sometimes times out.' Yellow }
+    }
+    catch { Say "  Azure prep stopped: $(($_.Exception.Message -split "`r?`n")[0])" Yellow }
 }
 
 # 6. Check that Azure is at the starting point.
@@ -195,12 +209,14 @@ Say ''
 & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File (Join-Path $here 'Prepare-Stage.ps1') -Check
 $live = ($LASTEXITCODE -eq 0)
 
-# 7. Open everything: the portal, the AI demo window, and the main demo last so it's in front.
-#    The validation demo is a backup now, so it doesn't open. OPEN-VALIDATION-DEMO.cmd opens it if you need it.
+# 7. Open everything: the portal, the AI demo window, the validation demo window, and the
+#    main demo last so it's in front.
 if (-not $NoOpen) {
     & (Join-Path $here 'Open-Portal.ps1')
     Start-Sleep -Seconds 2
     & cmd.exe /c "`"$(Join-Path $here 'OPEN-AI-DEMO.cmd')`""
+    Start-Sleep -Seconds 3
+    & cmd.exe /c "`"$(Join-Path $here 'OPEN-VALIDATION-DEMO.cmd')`""
     Start-Sleep -Seconds 3
     & code -n "$ws" "$(Join-Path $ws 'commands.ps1')" "$(Join-Path $ws 'app.v1.bicep')" 2>$null
     # ZoomIt runs in the tray. Start it now so Ctrl+1 works on stage.
@@ -210,10 +226,11 @@ if (-not $NoOpen) {
 Say ''
 if ($live) { Say 'All set.' Green }
 else { Say 'Not ready yet: Azure is not at the starting point. Run SETUP-LAPTOP.cmd again before the talk.' Yellow }
-Say '  1. VS Code opens two windows: Stacks What-If demo and AI demo. If one asks'
+Say '  1. VS Code opens three windows: Stacks What-If demo, Validation demo and AI demo. If one asks'
 Say '     whether you trust the authors, click "Yes, I trust the authors".'
 Say '  2. In Edge, sign in to the portal if it asks. Leave the three tabs open, and zoom the portal to 175% (Ctrl+plus).'
 Say '  3. In the Stacks What-If demo window, press Ctrl + ` (the key under Esc) to open the demo terminal.'
 Say '     It loads Azure PowerShell and leaves a PS> prompt. Leave it there.'
+Say '     Do the same in the Validation demo window. That one only needs the Bicep CLI.'
 Say '  4. The AI demo window shows the recorded Copilot chat as a page, chat\stack-migration-chat.md.'
 Say '  5. Then follow README.md.'

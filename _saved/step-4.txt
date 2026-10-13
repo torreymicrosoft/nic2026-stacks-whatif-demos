@@ -1,41 +1,24 @@
-Resource Id: /subscriptions/00000000-0000-0000-0000-000000000000/resourc
-eGroups/rg-demo-nic2026-stacks/providers/Microsoft.Resources/deploymentS
-tacksWhatIfResults/whatif-delete
-Name: whatif-delete
-Provisioning State: succeeded
-Stack Resource Id: /subscriptions/00000000-0000-0000-0000-000000000000/r
-esourceGroups/rg-demo-nic2026-stacks/providers/Microsoft.Resources/deplo
-ymentStacks/stack-app
-Correlation Id: 00000000-0000-0000-0000-000000000000
-Creation Time: 2026-10-12T01:11:08.3884919Z
-Expiration Time: 2026-10-12T02:11:08.3884919Z
+Note: The result may contain false positive predictions (noise).
+You can help us improve the accuracy of the result by opening an issue here: https://aka.ms/WhatIfIssues.
+NOTICE! - Want to get What-if without noise? Move to Deployment Stacks What-If https://aka.ms/stackswhatifGA
 
 Resource and property changes are indicated with these symbols:
-  + Create              ! Unsupported
-  ~ Modify              - Delete
-  = NoChange            v Detach
+  - Delete
+  ~ Modify
 
-Changes to Managed Resources:
+The deployment will update the following scope:
 
-Azure
-  = /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/r
-g-demo-nic2026-stacks/providers/Microsoft.Network/networkSecurityGroups/
-nsg-app [2024-05-01]
-  = Management Status: "managed"
-  = Deny Status: "denyDelete"
-  - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/r
-g-demo-nic2026-stacks/providers/Microsoft.Network/virtualNetworks/vnet-a
-pp
-  ~ Management Status: "managed" => "notManaged"
-  ~ Deny Status: "denyDelete" => "none"
-  = /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/r
-g-demo-nic2026-stacks/providers/Microsoft.Storage/storageAccounts/stappb
-5plrxcdyi6my [2023-05-01]
-  = Management Status: "managed"
-  = Deny Status: "denyDelete"
-Deleting - Resources Marked for Deletion 1 total:
+Scope: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-demo-nic2026-stacks
 
-Azure
-  - /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/r
-g-demo-nic2026-stacks/providers/Microsoft.Network/virtualNetworks/vnet-a
-pp
+  ~ Microsoft.Network/networkSecurityGroups/nsg-app [2024-05-01]
+    - tags.myTag: "myValue"
+
+  ~ Microsoft.Network/virtualNetworks/vnet-app [2024-05-01]
+    - properties.privateEndpointVNetPolicies: "Disabled"
+    - tags.myTag:                             "myValue"
+
+  ~ Microsoft.Storage/storageAccounts/stappb5plrxcdyi6my [2023-05-01]
+    - tags.myTag: "myValue"
+    ~ sku.name:   "Standard_LRS" => "Standard_GRS"
+
+Resource changes: 3 to modify.

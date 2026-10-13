@@ -4,14 +4,14 @@
 
     In the demo terminal, run it once:
         ..\Start-PressEnter.ps1        start at the beginning
-        ..\Start-PressEnter.ps1 4      start at step 4 (it puts the $stackId line first)
+        ..\Start-PressEnter.ps1 6      start at step 6 (it puts the $stackId line first)
     Then, at an empty prompt, Enter puts the next command from commands.ps1 at the prompt, and Enter
     again runs it. Typing your own command and pressing Enter works as usual.
     If a step fails because Azure can't be reached, press F12. It puts ..\Show-Saved.ps1 for that
     step at the prompt, and Enter shows what a rehearsal saved, labeled as saved.
         ..\Start-PressEnter.ps1 -Off   puts Enter back to normal
 #>
-param([ValidateRange(1, 7)][int]$From = 1, [switch]$Off)
+param([ValidateRange(1, 99)][int]$From = 1, [switch]$Off)
 
 if ($Off) {
     Set-PSReadLineKeyHandler -Chord Enter -Function AcceptLine
@@ -21,8 +21,8 @@ if ($Off) {
     return
 }
 
-# Read the commands from commands.ps1, in order. A line under "# The ..." (the diffs) belongs to the
-# numbered step after it. Comments, including the Azure CLI lines, are skipped.
+# Read the commands from commands.ps1, in order. A diff (a code line) and anything under "# The ..." belong
+# to the numbered step after them. Comments, including the Azure CLI lines, are skipped.
 $entries = [Collections.Generic.List[object]]::new()
 $pending = [Collections.Generic.List[string]]::new()
 $current = $null
@@ -35,13 +35,12 @@ foreach ($line in Get-Content (Join-Path $PSScriptRoot 'stacks-whatif-demo\comma
     }
     if ($line -match '^# The ') { $current = $null; continue }
     if (-not $line.Trim() -or $line.TrimStart().StartsWith('#')) { continue }
-    if ($current) { $entries.Add([pscustomobject]@{ Step = $current; Command = $line.Trim() }) } else { $pending.Add($line.Trim()) }
+    if ($current -and -not $line.TrimStart().StartsWith('code ')) { $entries.Add([pscustomobject]@{ Step = $current; Command = $line.Trim() }) } else { $pending.Add($line.Trim()) }
 }
 $queue = @($entries | Where-Object Step -ge $From)
-if ($From -ge 4) {
-    $id = $entries | Where-Object { $_.Command -like '$stackId =*' } | Select-Object -First 1
-    if ($id) { $queue = @([pscustomobject]@{ Step = $From; Command = $id.Command }) + $queue }
-}
+# Starting after the step that sets $stackId, put that line first, since later steps use it.
+$id = $entries | Where-Object { $_.Command -like '$stackId =*' } | Select-Object -First 1
+if ($id -and $From -gt $id.Step) { $queue = @([pscustomobject]@{ Step = $From; Command = $id.Command }) + $queue }
 
 $global:StacksDemo = [pscustomobject]@{ Queue = $queue; Index = 0 }
 
